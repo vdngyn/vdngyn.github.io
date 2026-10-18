@@ -21,7 +21,7 @@
   --font-size-base: 18px;
   --font-size-small: 14px;
   --line-height: 1.3em;
-  --content-width: 548px; /* ~2 extra characters of 24px body text per side */
+  --content-width: 572px; /* ~3 extra characters of 24px body text per side over 500px */
 }
 
 /* =============================================================================
