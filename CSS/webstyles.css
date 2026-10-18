@@ -143,58 +143,56 @@ a:hover { text-decoration: none; }
    BROWNIAN MOTION
    ============================================================================= */
 
-#brownian-container {
-  width: 100%;
-  max-width: 460px;
-  aspect-ratio: 460 / 250;  /* matches the SVG viewBox; reserves space before JS runs */
-  margin: 2rem auto 0;
+/* The whole window is the plane: clicks anywhere launch a batch */
+html {
   cursor: crosshair;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
-  outline: none;
 }
 
-#brownian-container svg {
-  display: block;
+/* Positioned on the page, not the window, so drawn paths scroll with the text */
+#brownian-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   overflow: visible;
+  pointer-events: none;
+  z-index: 10;
 }
 
-/* Axes fade out when idle; hovering or focusing brings them back */
-#brownian-container .bm-axes {
+/* Axes fade out when idle */
+#brownian-overlay .bm-axes {
   transition: opacity 0.4s ease;
 }
 
-#brownian-container.is-idle .bm-axes {
+#brownian-overlay.is-idle .bm-axes {
   opacity: 0;
   transition-duration: 2s;
 }
 
-#brownian-container.is-idle:hover .bm-axes,
-#brownian-container.is-idle:focus-visible .bm-axes {
-  opacity: 1;
-  transition-duration: 0.4s;
-}
-
-#brownian-container .bm-fading {
+#brownian-overlay .bm-fading {
   opacity: 0;
   transition: opacity 1.2s ease;
 }
 
-#brownian-container:focus-visible {
-  outline: 1px dotted #aaa;
-  outline-offset: 4px;
-}
-
 .brownian-hint {
+  display: block;
+  margin: 2rem auto 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
   font-size: 10px;
   color: #aaa;
-  margin-top: 4px;
+  cursor: inherit;
   transition: opacity 0.8s ease;
+}
+
+.brownian-hint:focus-visible {
+  outline: 1px dotted #aaa;
+  outline-offset: 4px;
 }
 
 .brownian-hint.is-hidden {

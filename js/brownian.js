@@ -4,11 +4,18 @@
  * INTERACTIVE BLACK–SCHOLES MONTE CARLO COMPONENT (SVG Vector Version)
  * ============================================================================
  *
- * Monte Carlo simulation of Black–Scholes price paths in the first quadrant.
- * Prices follow geometric Brownian motion, dS = μS dt + σS dW, simulated with
- * the exact log-normal step. Clicking the plane draws a single path from the
- * y-axis to the clicked point, then a batch of independent paths branching
- * from that point to the time horizon T.
+ * Monte Carlo simulation of Black–Scholes price paths across the visible
+ * window. Prices follow geometric Brownian motion, dS = μS dt + σS dW,
+ * simulated with the exact log-normal step. Time runs from t = 0 at the
+ * window's left edge to the horizon T at its right edge. Price is on a log
+ * scale fixed to the page: the initial price S₀ (log-return 0) sits just below
+ * the contact line, and the top of the page is 10·S₀.
+ *
+ * Clicking anywhere on the page draws a single path from S₀ at the left edge to
+ * the clicked point (a Brownian bridge in log-price), then a batch of
+ * independent paths branching from that point to the right edge. One path in
+ * every batch suffers a black-swan crash: a single sudden log-normal jump down
+ * at a random time. Batches are drawn on the page, so they scroll with it.
  *
  * Each batch is simulated up front and written to the SVG once; the animation
  * only widens a clip rectangle from t = 0 to T, so every path advances through
@@ -18,7 +25,7 @@
  * 1971-02-05 to 2026-10-16 (FRED series NASDAQCOM).
  *
  * @author Vu Nguyen
- * @version 2.0.0
+ * @version 3.0.0
  * @license MIT
  * ============================================================================
  */
@@ -33,17 +40,25 @@
   const SVG_NS = 'http://www.w3.org/2000/svg';
 
   const config = {
-    width: 460,           // viewBox size; keep in sync with aspect-ratio in webstyles.css
-    height: 250,
-    yMax: 1,              // plane spans [0, T] × [0, yMax]
+    axisAnchor: '.contact-line',  // log-return 0 (price S₀) sits just below this
+    axisGap: 6,           // px below the anchor
+    topMultiple: 10,      // the top of the page is this multiple of S₀
     axisColor: '#aaa',
     pathColor: '#0e0e7b',
     pathWidth: 1.2,
     pathOpacity: 0.65,
     historyOpacity: 0.9,
+    // Black-swan crash size: log-jump ~ N(mean, sd), capped at swanMaxLog, so
+    // e^-0.4 ≈ a 33% drop on average (cf. Black Monday 1987: Nasdaq −11% in a
+    // day; Covid crash 2020: about −30% in a month)
+    swanMean: -0.4,
+    swanSd: 0.1,
+    swanMaxLog: -0.15,
     paths: 8,             // Monte Carlo sample size per click
-    steps: 400,           // time steps from 0 to T
-    duration: 2200,       // ms to sweep from 0 to T
+    pxPerStep: 1.5,       // time resolution: one step per 1.5px of window width
+    sweepSpeed: 350,      // px/s from t = 0 to T, clamped to the durations below
+    minDuration: 2000,    // ms
+    maxDuration: 4000,    // ms
     idleDelay: 3000,      // ms after a batch finishes before the axes fade out
     // NASDAQ Composite, 1971-02-05 to 2026-10-16 (14,043 daily closes):
     // 9.99% annualized (geometric) return and 20.23% annualized volatility of
@@ -51,15 +66,13 @@
     drift: 0.1204,        // μ, annualized
     volatility: 0.2023,   // σ, annualized
     horizon: 3,           // T, in years
-    startY: 0.5,
-    demoT: 0.3,           // branch time of the batch run on page load
+    textSelector: 'main', // the batch run on page load and by keyboard branches
+                          // centered below this, and stays below it
     hintId: 'brownian-hint'   // hidden once the first user-launched batch finishes
   };
 
-  // Plot area (viewBox units)
-  const L = 22, R = config.width - 18, T = 14, B = config.height - 24;
-  const toX = (/** @type {number} */ t) => L + t * (R - L);
-  const toY = (/** @type {number} */ y) => B - (y / config.yMax) * (B - T);
+  // Clicks on these keep their normal behavior
+  const INTERACTIVE = 'a, input, textarea, select, label, [contenteditable]';
 
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -74,34 +87,36 @@
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * Math.random());
   }
 
-  // Exact GBM log-step over dt = T / steps: S ← S·exp((μ − σ²/2)dt + σ√dt·Z)
-  function logStep() {
-    const { drift: mu, volatility: sigma, horizon, steps } = config;
-    const dt = horizon / steps;
-    return (mu - sigma * sigma / 2) * dt + sigma * Math.sqrt(dt) * gaussian();
-  }
-
   /**
-   * GBM path of n steps from y0; with backward = true, a path that ends at y0
-   * instead (the log-price walk run backward in time)
-   * @param {number} y0
+   * GBM log-price path ln(S/S₀) of n steps of size dt from x0. Each step is
+   * exact: ln S ← ln S + (μ − σ²/2)dt + σ√dt·Z, plus jumpLog on step jumpAt.
+   * @param {number} x0
    * @param {number} n
-   * @param {boolean} [backward]
+   * @param {number} dt
+   * @param {number} [jumpAt]
+   * @param {number} [jumpLog]
    */
-  function simulate(y0, n, backward = false) {
-    const ys = [y0];
-    for (let k = 0; k < n; k++) ys.push(ys[k] * Math.exp(backward ? -logStep() : logStep()));
-    return backward ? ys.reverse() : ys;
+  function simulate(x0, n, dt, jumpAt = -1, jumpLog = 0) {
+    const { drift: mu, volatility: sigma } = config;
+    const m = (mu - sigma * sigma / 2) * dt, s = sigma * Math.sqrt(dt);
+    const xs = [x0];
+    for (let k = 0; k < n; k++) xs.push(xs[k] + m + s * gaussian() + (k === jumpAt ? jumpLog : 0));
+    return xs;
   }
 
   /**
-   * SVG path data for values ys starting at time step k0
-   * @param {number[]} ys
-   * @param {number} k0
+   * Log-price path of n steps from 0 to x1: a GBM conditioned on its endpoint,
+   * i.e. a Brownian bridge (the drift drops out once the endpoint is fixed)
+   * @param {number} x1
+   * @param {number} n
+   * @param {number} dt
    */
-  function pathData(ys, k0) {
-    const parts = ys.map((y, i) => `${toX((k0 + i) / config.steps).toFixed(1)},${toY(y).toFixed(1)}`);
-    return `M${parts.join('L')}`;
+  function bridge(x1, n, dt) {
+    if (n === 0) return [x1];
+    const s = config.volatility * Math.sqrt(dt);
+    const ws = [0];
+    for (let k = 0; k < n; k++) ws.push(ws[k] + s * gaussian());
+    return ws.map((wk, k) => wk - (k / n) * (ws[n] - x1));
   }
 
   // ===========================================================================
@@ -120,26 +135,36 @@
     return el;
   }
 
-  function createAxes() {
-    const g = svgEl('g', { class: 'bm-axes', stroke: config.axisColor, 'stroke-width': 0.75, fill: 'none' });
-    const xe = R + 4, ye = T - 8;
-    g.append(
-      svgEl('path', { d: `M${L},${ye}V${B}H${xe}` }),
-      svgEl('path', { d: `M${xe - 5},${B - 3}L${xe},${B}L${xe - 5},${B + 3}M${L - 3},${ye + 5}L${L},${ye}L${L + 3},${ye + 5}` }),
-      // Time horizon T
-      svgEl('path', { d: `M${R},${T}V${B}`, 'stroke-dasharray': '2 3', 'stroke-opacity': 0.6 }),
-      // Ticks at quarters
-      svgEl('path', { d: [0.25, 0.5, 0.75].map(f => `M${toX(f)},${B}v3M${L - 3},${toY(f * config.yMax)}h3`).join('') })
-    );
-    return g;
+  // Log price scale on the page: y = c − k·ln(S/S₀), with S₀ just below the
+  // anchor and topMultiple·S₀ at the top of the page
+  function scale() {
+    const anchor = document.querySelector(config.axisAnchor);
+    const c = anchor
+      ? anchor.getBoundingClientRect().bottom + window.scrollY + config.axisGap
+      : window.innerHeight / 2;
+    return { c, k: c / Math.log(config.topMultiple) };
+  }
+
+  // y-axis down the left edge with a tick at each doubling of S₀ (a longer one
+  // at S₀ itself)
+  /** @param {number} page page height */
+  function axesData(page) {
+    const { c, k } = scale();
+    const ticks = [-4, -3, -2, -1, 0, 1, 2, 3]
+      .map(j => ({ y: c - k * j * Math.LN2, len: j === 0 ? 9 : 5 }))
+      .filter(({ y }) => y > 0 && y < page)
+      .map(({ y, len }) => `M0,${y.toFixed(1)}h${len}`).join('');
+    return `M0.5,0V${page}${ticks}`;
   }
 
   // ===========================================================================
   // MAIN MODULE
   // ===========================================================================
 
-  /** @type {HTMLElement | null} */
-  let root = null;
+  /** @type {SVGSVGElement | null} */
+  let svg = null;
+  /** @type {SVGPathElement | null} */
+  let axes = null;
   /** @type {SVGGElement | null} */
   let layer = null;
   /** @type {SVGGElement | null} */
@@ -148,18 +173,31 @@
   let idleTimer = 0;
   let batchId = 0;
 
+  function viewport() {
+    return { w: document.documentElement.clientWidth, h: window.innerHeight };
+  }
+
+  function drawAxes() {
+    axes?.setAttribute('d', axesData(document.documentElement.scrollHeight));
+  }
+
   /**
-   * Draw a path from the y-axis to (t1, y1), then a batch branching from there
-   * @param {number} t1
+   * Draw a path from the window's left edge to the point (x1, y1) in window
+   * pixels, then a batch branching from there to the right edge
+   * @param {number} x1
    * @param {number} y1
    * @param {boolean} user
+   * @param {number} [ceiling] window y the paths should stay below, if possible
    */
-  function release(t1, y1, user) {
-    if (!root || !layer) return;
+  function release(x1, y1, user, ceiling = -Infinity) {
+    if (!svg || !layer) return;
+    const { w, h } = viewport();
+    if (w <= 0 || h <= 0) return;
 
     // Bring the axes back and fade out the previous batch
+    drawAxes();
     clearTimeout(idleTimer);
-    root.classList.remove('is-idle');
+    svg.classList.remove('is-idle');
     cancelAnimationFrame(frame);
     if (current) {
       const old = current;
@@ -167,9 +205,29 @@
       setTimeout(() => old.remove(), 1200);
     }
 
-    const n1 = Math.round(t1 * config.steps);
+    // Window x ∈ [0, w] is t ∈ [0, T]; page y = c − k·x for log-price x = ln(S/S₀)
+    const { scrollX: ox, scrollY: oy } = window;
+    const { c, k } = scale();
+    const steps = Math.max(100, Math.round(w / config.pxPerStep));
+    const dt = config.horizon / steps;
+    const n1 = Math.round((Math.min(Math.max(x1, 0), w) / w) * steps);
+    const logPrice1 = (c - (y1 + oy)) / k;
+    const pathData = (/** @type {number[]} */ xs, /** @type {number} */ k0) =>
+      'M' + xs.map((x, i) => `${(ox + ((k0 + i) / steps) * w).toFixed(1)},${(c - k * x).toFixed(1)}`).join('L');
+
+    // Resample paths that cross the ceiling, keeping the lowest-peaking try
+    const cap = (c - (ceiling + oy)) / k;
+    const below = (/** @type {() => number[]} */ sample) => {
+      let best = sample(), peak = Math.max(...best);
+      for (let i = 0; i < 40 && peak >= cap; i++) {
+        const xs = sample(), p = Math.max(...xs);
+        if (p < peak) [best, peak] = [xs, p];
+      }
+      return best;
+    };
+
     const clipId = `bm-reveal-${++batchId}`;
-    const clipRect = svgEl('rect', { x: L - 2, y: -1e4, width: 0, height: 1e4 + B + 4 });
+    const clipRect = svgEl('rect', { x: ox - 2, y: -1e5, width: 0, height: 2e5 });
     const clip = svgEl('clipPath', { id: clipId });
     clip.append(clipRect);
 
@@ -181,21 +239,27 @@
       'stroke-opacity': config.pathOpacity,
       'stroke-linejoin': 'round'
     });
-    paths.append(svgEl('path', { d: pathData(simulate(y1, n1, true), 0), 'stroke-opacity': config.historyOpacity }));
+    paths.append(svgEl('path', { d: pathData(below(() => bridge(logPrice1, n1, dt)), 0), 'stroke-opacity': config.historyOpacity }));
     for (let i = 0; i < config.paths; i++) {
-      paths.append(svgEl('path', { d: pathData(simulate(y1, config.steps - n1), n1) }));
+      paths.append(svgEl('path', { d: pathData(below(() => simulate(logPrice1, steps - n1, dt)), n1) }));
     }
+
+    // Black swan: one more path, crashing once at a uniformly random time
+    const swanAt = Math.floor(Math.random() * (steps - n1));
+    const swanLog = Math.min(config.swanMaxLog, config.swanMean + config.swanSd * gaussian());
+    paths.append(svgEl('path', { d: pathData(below(() => simulate(logPrice1, steps - n1, dt, swanAt, swanLog)), n1) }));
 
     const batch = svgEl('g', {});
     batch.append(clip, paths);
     layer.append(batch);
     current = batch;
 
-    // Sweep the clip from t = 0 to T
-    const span = R - L + 4;
+    // Sweep the clip from the left edge to the right edge
+    const span = w + 4;
+    const duration = Math.min(config.maxDuration, Math.max(config.minDuration, (w / config.sweepSpeed) * 1000));
     const done = () => {
       if (user) document.getElementById(config.hintId)?.classList.add('is-hidden');
-      idleTimer = window.setTimeout(() => root?.classList.add('is-idle'), config.idleDelay);
+      idleTimer = window.setTimeout(() => svg?.classList.add('is-idle'), config.idleDelay);
     };
     if (reducedMotion) {
       clipRect.setAttribute('width', String(span));
@@ -204,7 +268,7 @@
     }
     const start = performance.now();
     const tick = (/** @type {number} */ now) => {
-      const p = Math.min(1, (now - start) / config.duration);
+      const p = Math.min(1, (now - start) / duration);
       clipRect.setAttribute('width', (p * span).toFixed(1));
       if (p < 1) frame = requestAnimationFrame(tick);
       else done();
@@ -212,33 +276,36 @@
     frame = requestAnimationFrame(tick);
   }
 
+  // Page load and keyboard: branch centered in the space below the main text,
+  // keeping the paths out of the text (leaves at least 15% of the window free)
+  function releaseDefault(/** @type {boolean} */ user) {
+    const { w, h } = viewport();
+    const textBottom = document.querySelector(config.textSelector)?.getBoundingClientRect().bottom ?? 0;
+    const top = Math.min(Math.max(textBottom, 0), 0.85 * h);
+    release(w / 2, (top + h) / 2, user, top + 4);
+  }
+
   function init() {
-    const container = root = document.getElementById('brownian-container');
-    if (!container) return;
+    // Overlay on the page (not the window); never intercepts clicks
+    svg = svgEl('svg', { id: 'brownian-overlay', 'aria-hidden': 'true' });
+    axes = svgEl('path', { class: 'bm-axes', fill: 'none', stroke: config.axisColor, 'stroke-width': 0.75 });
+    layer = svgEl('g', {});
+    svg.append(axes, layer);
+    document.body.append(svg);
 
-    const svg = svgEl('svg', { viewBox: `0 0 ${config.width} ${config.height}`, 'aria-hidden': 'true' });
-    // Unclipped vertically: paths stop at T and stay positive, but may wander
-    // above the plot and over the page; they never block clicks on the text
-    layer = svgEl('g', { 'pointer-events': 'none' });
-    svg.append(createAxes(), layer);
-    container.append(svg);
+    drawAxes();
+    window.addEventListener('resize', drawAxes);
 
-    container.addEventListener('click', e => {
-      const r = svg.getBoundingClientRect();
-      const t = ((e.clientX - r.left) * (config.width / r.width) - L) / (R - L);
-      const y = ((B - (e.clientY - r.top) * (config.height / r.height)) / (B - T)) * config.yMax;
-      if (t < 1 && y > 0 && y <= config.yMax * 1.05) release(Math.max(t, 0), Math.min(y, config.yMax), true);
-    });
-    container.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        release(0, config.startY, true);
-      }
+    document.addEventListener('click', e => {
+      if (!(e.target instanceof Element) || e.target.closest(INTERACTIVE)) return;
+      if (String(window.getSelection() ?? '')) return;  // finishing a text selection
+      if (e.detail === 0) releaseDefault(true);         // keyboard activation of the hint button
+      else release(e.clientX, e.clientY, true);
     });
 
     // Demo batch shortly after load, unless the visitor has already clicked
     setTimeout(() => {
-      if (!current) release(config.demoT, config.startY, false);
+      if (!current) releaseDefault(false);
     }, 400);
   }
 
