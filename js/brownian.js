@@ -21,8 +21,8 @@
  * only widens a clip rectangle from t = 0 to T, so every path advances through
  * time together at the same speed on any display refresh rate.
  *
- * Drift and volatility are fixed estimates from NASDAQ Composite daily closes,
- * 1971-02-05 to 2026-10-16 (FRED series NASDAQCOM).
+ * Drift and volatility are fixed estimates from NYSE Composite daily closes,
+ * 1970-01-02 to 2026-10-16 (Yahoo Finance ^NYA).
  *
  * @author Vu Nguyen
  * @version 3.0.0
@@ -49,8 +49,8 @@
     pathOpacity: 0.65,
     historyOpacity: 0.9,
     // Black-swan crash size: log-jump ~ N(mean, sd), capped at swanMaxLog, so
-    // e^-0.4 ≈ a 33% drop on average (cf. Black Monday 1987: Nasdaq −11% in a
-    // day; Covid crash 2020: about −30% in a month)
+    // e^-0.4 ≈ a 33% drop on average (cf. NYSE Composite: Black Monday 1987,
+    // −19% in a day; Covid crash 2020, −38% peak to trough)
     swanMean: -0.4,
     swanSd: 0.1,
     swanMaxLog: -0.15,
@@ -60,11 +60,11 @@
     minDuration: 2000,    // ms
     maxDuration: 4000,    // ms
     idleDelay: 3000,      // ms after a batch finishes before the axes fade out
-    // NASDAQ Composite, 1971-02-05 to 2026-10-16 (14,043 daily closes):
-    // 9.99% annualized (geometric) return and 20.23% annualized volatility of
-    // daily log returns, so μ = 0.0999 + σ²/2 ≈ 0.1204
-    drift: 0.1204,        // μ, annualized
-    volatility: 0.2023,   // σ, annualized
+    // NYSE Composite, 1970-01-02 to 2026-10-16 (14,320 daily closes):
+    // 6.65% annualized (geometric) return and 16.52% annualized volatility of
+    // daily log returns, so μ = 0.0665 + σ²/2 ≈ 0.0802
+    drift: 0.0802,        // μ, annualized
+    volatility: 0.1652,   // σ, annualized
     horizon: 3,           // T, in years
     textSelector: 'main', // the batch run on page load and by keyboard branches
                           // centered below this, and stays below it
