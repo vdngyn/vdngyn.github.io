@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Vu Nguyen</title>
   <meta name="description" content="Vu Nguyen">
-  <meta name="keywords" content="Vu Nguyen, Mathematics, Geometric Measure Theory, Probability, Syracuse University">
+  <meta name="keywords" content="Vu Nguyen, Mathematics, Probability, Syracuse University, Courant Institute, Tisch School of the Arts, Random Processes, Rare Events, Stochastic Processes">
   <meta name="author" content="Vu Nguyen 2021-Current, Aaryan Virani 2021-2025">
   <link rel="stylesheet" href="CSS/webstyles.css">
-  <link rel="stylesheet" href="CSS/polyhedron.css">
+  <script src="js/brownian.js" defer></script>
 </head>
 <body>
   <main class="site-container">
@@ -20,27 +20,20 @@
       <a href="mailto:vunguyen@nyu.edu">contact</a>
     </nav>
 
-			<!-- <h1>Vu's Website</h1>
-			<br/>
-			<hr/>
-			<p>This is why you should give me a job</p>
-			<p>I got impeccable coding skillz :p </p>
-			<p>H<sup>2</sup>0 -->	
-
     <section class="intro">
       <h2>Hi, I'm </h2><h1>Vu Nguyen</h1>
 	  
       <br><br>
       <h2>
-        I'm a Ph.D student studying Mathematics at 
+        I'm a graduate student studying Mathematics & Statistics at 
         <a href="https://artsandsciences.syracuse.edu/mathematics/">Syracuse University</a>. 
-        Previously, I completed my undergraduate in Math and Performance Studies at New York University's 
+        Previously, I completed my undergraduate in 2025 in Math and Performance Studies at New York University's 
         <a href="https://cims.nyu.edu/">Courant Institute of Mathematical Sciences</a> and 
-        <a href="https://tisch.nyu.edu/performance-studies/">Tisch School of the Arts.</a> 
-        Currently, I am broadly interested in the study of how 
-        <a href="https://en.wikipedia.org/wiki/Geometric_measure_theory">geometry</a> and 
-        <a href="https://en.wikipedia.org/wiki/Probability_theory">randomness</a> are used to 
-        analyze and understand complex &amp; volatile systems.
+        <a href="https://tisch.nyu.edu/performance-studies/">Tisch School of the Arts</a>. 
+        <br>
+        Currently, I'm broadly interested in how <a href="https://en.wikipedia.org/wiki/Stochastic_process">random processes</a> 
+        & <a href="https://en.wikipedia.org/wiki/Transportation_theory_(mathematics)">optimization</a> 
+        are used to <a href="https://en.wikipedia.org/wiki/Synthetic_data">generate "good" data</a> and model <a href="https://en.wikipedia.org/wiki/Rare_event">rare events</a>.
       </h2>
     </section>
 
@@ -48,13 +41,8 @@
       contact: <a href="mailto:vunguyen@nyu.edu">vunguyen@nyu.edu</a>
     </p>
 
-    <div id="polyhedron-container"></div>
-    <p id="polyhedron-hint" class="polyhedron-hint">
-      Triakis Icosahedron<br>
-      <span>drag to rotate • click to switch</span>
-    </p>
+    <div id="brownian-container" role="button" tabindex="0" aria-label="Run a Black–Scholes Monte Carlo simulation of the NASDAQ"></div>
+    <p id="brownian-hint" class="brownian-hint">click to make a new graph!</p>
   </main>
-
-  <script src="js/polyhedron.js"></script>
 </body>
 </html>

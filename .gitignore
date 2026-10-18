@@ -1,9 +1,6 @@
 # Dependencies
 node_modules/
 
-# Build outputs (optional - only if you want to gitignore compiled JS)
-# js/
-
 # IDE / Editor
 .vscode/
 .idea/

@@ -140,17 +140,65 @@ a:hover { text-decoration: none; }
 }
 
 /* =============================================================================
-   POLYHEDRON HINT
+   BROWNIAN MOTION
    ============================================================================= */
 
-.polyhedron-hint {
-  font-size: 11px;
-  color: #aaa;
-  margin-top: -10px;
+#brownian-container {
+  width: 100%;
+  max-width: 460px;
+  aspect-ratio: 460 / 250;  /* matches the SVG viewBox; reserves space before JS runs */
+  margin: 2rem auto 0;
+  cursor: crosshair;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  outline: none;
 }
 
-.polyhedron-hint span {
+#brownian-container svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* Axes fade out when idle; hovering or focusing brings them back */
+#brownian-container .bm-axes {
+  transition: opacity 0.4s ease;
+}
+
+#brownian-container.is-idle .bm-axes {
+  opacity: 0;
+  transition-duration: 2s;
+}
+
+#brownian-container.is-idle:hover .bm-axes,
+#brownian-container.is-idle:focus-visible .bm-axes {
+  opacity: 1;
+  transition-duration: 0.4s;
+}
+
+#brownian-container .bm-fading {
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+
+#brownian-container:focus-visible {
+  outline: 1px dotted #aaa;
+  outline-offset: 4px;
+}
+
+.brownian-hint {
   font-size: 10px;
+  color: #aaa;
+  margin-top: 4px;
+  transition: opacity 0.8s ease;
+}
+
+.brownian-hint.is-hidden {
+  opacity: 0;
 }
 
 /* =============================================================================
