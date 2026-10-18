@@ -21,7 +21,7 @@
   --font-size-base: 18px;
   --font-size-small: 14px;
   --line-height: 1.3em;
-  --content-width: 500px;
+  --content-width: 548px; /* ~2 extra characters of 24px body text per side */
 }
 
 /* =============================================================================
@@ -177,9 +177,15 @@ html {
   transition: opacity 1.2s ease;
 }
 
+/* Pinned to the bottom of the window, whatever the scroll position */
 .brownian-hint {
-  display: block;
-  margin: 2rem auto 0;
+  position: fixed;
+  left: 50%;
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 11;
+  white-space: nowrap;
+  margin: 0;
   padding: 0;
   border: 0;
   background: none;

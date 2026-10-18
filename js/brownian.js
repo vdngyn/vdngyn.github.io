@@ -11,11 +11,14 @@
  * scale fixed to the page: the initial price S₀ (log-return 0) sits just below
  * the contact line, and the top of the page is 10·S₀.
  *
- * Clicking anywhere on the page draws a single path from S₀ at the left edge to
- * the clicked point (a Brownian bridge in log-price), then a batch of
- * independent paths branching from that point to the right edge. One path in
- * every batch suffers a black-swan crash: a single sudden log-normal jump down
- * at a random time. Batches are drawn on the page, so they scroll with it.
+ * Clicking anywhere on the page draws a single path from a random starting
+ * price at the left edge to the clicked point (a Brownian bridge in
+ * log-price), then a batch of independent paths branching from that point to
+ * the right edge. The farther
+ * the click is from S₀, the wilder the start: its log-price is normal around
+ * S₀, with a spread that grows logarithmically with the click's distance from
+ * S₀, from none at S₀ to the most at the top or bottom of the page. Batches
+ * are drawn on the page, so they scroll with it.
  *
  * Each batch is simulated up front and written to the SVG once; the animation
  * only widens a clip rectangle from t = 0 to T, so every path advances through
@@ -48,12 +51,11 @@
     pathWidth: 1.2,
     pathOpacity: 0.65,
     historyOpacity: 0.9,
-    // Black-swan crash size: log-jump ~ N(mean, sd), capped at swanMaxLog, so
-    // e^-0.4 ≈ a 33% drop on average (cf. NYSE Composite: Black Monday 1987,
-    // −19% in a day; Covid crash 2020, −38% peak to trough)
-    swanMean: -0.4,
-    swanSd: 0.1,
-    swanMaxLog: -0.15,
+    // Starting log-price ~ N(0, s²), s = baseSpread · ln(1 + d/baseKnee) /
+    // ln(1 + D/baseKnee) for a click d px from S₀, with D the distance from S₀
+    // to the page edge on the click's side
+    baseSpread: 0.75,     // s at the top or bottom of the page (e^±0.75 ≈ ×0.47–2.1)
+    baseKnee: 24,         // px; the spread rises fastest within this of S₀
     paths: 8,             // Monte Carlo sample size per click
     pxPerStep: 1.5,       // time resolution: one step per 1.5px of window width
     sweepSpeed: 350,      // px/s from t = 0 to T, clamped to the durations below
@@ -89,32 +91,31 @@
 
   /**
    * GBM log-price path ln(S/S₀) of n steps of size dt from x0. Each step is
-   * exact: ln S ← ln S + (μ − σ²/2)dt + σ√dt·Z, plus jumpLog on step jumpAt.
+   * exact: ln S ← ln S + (μ − σ²/2)dt + σ√dt·Z
    * @param {number} x0
    * @param {number} n
    * @param {number} dt
-   * @param {number} [jumpAt]
-   * @param {number} [jumpLog]
    */
-  function simulate(x0, n, dt, jumpAt = -1, jumpLog = 0) {
+  function simulate(x0, n, dt) {
     const { drift: mu, volatility: sigma } = config;
     const m = (mu - sigma * sigma / 2) * dt, s = sigma * Math.sqrt(dt);
     const xs = [x0];
-    for (let k = 0; k < n; k++) xs.push(xs[k] + m + s * gaussian() + (k === jumpAt ? jumpLog : 0));
+    for (let k = 0; k < n; k++) xs.push(xs[k] + m + s * gaussian());
     return xs;
   }
 
   /**
-   * Log-price path of n steps from 0 to x1: a GBM conditioned on its endpoint,
-   * i.e. a Brownian bridge (the drift drops out once the endpoint is fixed)
+   * Log-price path of n steps from x0 to x1: a GBM conditioned on its
+   * endpoints, i.e. a Brownian bridge (the drift drops out once they are fixed)
+   * @param {number} x0
    * @param {number} x1
    * @param {number} n
    * @param {number} dt
    */
-  function bridge(x1, n, dt) {
+  function bridge(x0, x1, n, dt) {
     if (n === 0) return [x1];
     const s = config.volatility * Math.sqrt(dt);
-    const ws = [0];
+    const ws = [x0];
     for (let k = 0; k < n; k++) ws.push(ws[k] + s * gaussian());
     return ws.map((wk, k) => wk - (k / n) * (ws[n] - x1));
   }
@@ -143,6 +144,19 @@
       ? anchor.getBoundingClientRect().bottom + window.scrollY + config.axisGap
       : window.innerHeight / 2;
     return { c, k: c / Math.log(config.topMultiple) };
+  }
+
+  /**
+   * Spread of the starting log-price for a click at page y, growing
+   * logarithmically from 0 at S₀ to baseSpread at the page edge on that side
+   * @param {number} y page y of the click
+   * @param {number} c page y of S₀
+   * @param {number} page page height
+   */
+  function baseSpread(y, c, page) {
+    const { baseSpread: max, baseKnee: knee } = config;
+    const edge = Math.max(1, y < c ? c : page - c);
+    return max * Math.min(1, Math.log1p(Math.abs(y - c) / knee) / Math.log1p(edge / knee));
   }
 
   // y-axis down the left edge with a tick at each doubling of S₀ (a longer one
@@ -212,6 +226,11 @@
     const dt = config.horizon / steps;
     const n1 = Math.round((Math.min(Math.max(x1, 0), w) / w) * steps);
     const logPrice1 = (c - (y1 + oy)) / k;
+
+    // Random starting log-price, kept on the page
+    const page = document.documentElement.scrollHeight;
+    const spread = baseSpread(y1 + oy, c, page);
+    const logPrice0 = () => Math.min(c / k, Math.max((c - page) / k, spread * gaussian()));
     const pathData = (/** @type {number[]} */ xs, /** @type {number} */ k0) =>
       'M' + xs.map((x, i) => `${(ox + ((k0 + i) / steps) * w).toFixed(1)},${(c - k * x).toFixed(1)}`).join('L');
 
@@ -239,15 +258,10 @@
       'stroke-opacity': config.pathOpacity,
       'stroke-linejoin': 'round'
     });
-    paths.append(svgEl('path', { d: pathData(below(() => bridge(logPrice1, n1, dt)), 0), 'stroke-opacity': config.historyOpacity }));
+    paths.append(svgEl('path', { d: pathData(below(() => bridge(logPrice0(), logPrice1, n1, dt)), 0), 'stroke-opacity': config.historyOpacity }));
     for (let i = 0; i < config.paths; i++) {
       paths.append(svgEl('path', { d: pathData(below(() => simulate(logPrice1, steps - n1, dt)), n1) }));
     }
-
-    // Black swan: one more path, crashing once at a uniformly random time
-    const swanAt = Math.floor(Math.random() * (steps - n1));
-    const swanLog = Math.min(config.swanMaxLog, config.swanMean + config.swanSd * gaussian());
-    paths.append(svgEl('path', { d: pathData(below(() => simulate(logPrice1, steps - n1, dt, swanAt, swanLog)), n1) }));
 
     const batch = svgEl('g', {});
     batch.append(clip, paths);
