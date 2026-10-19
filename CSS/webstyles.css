@@ -101,6 +101,12 @@ a {
 
 a:hover { text-decoration: none; }
 
+/* Hidden link: reads exactly like the surrounding text */
+a.hidden-link {
+  color: inherit;
+  text-decoration: none;
+}
+
 /* =============================================================================
    NAVIGATION
    ============================================================================= */
