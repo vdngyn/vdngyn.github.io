@@ -45,7 +45,10 @@ body {
   max-width: var(--content-width);
   margin: 0 auto;
   padding: 2rem 1rem;
+  padding-bottom: max(2rem, 25vh); /* room below the text for the page-load graph */
   text-align: center;
+  position: relative;
+  z-index: 1; /* text and links sit above the graph */
 }
 
 .intro {
@@ -151,7 +154,8 @@ html {
   touch-action: manipulation;
 }
 
-/* Positioned on the page, not the window, so drawn paths scroll with the text */
+/* Positioned on the page, not the window, so drawn paths scroll with the text;
+   drawn behind the text */
 #brownian-overlay {
   position: absolute;
   top: 0;
@@ -160,7 +164,7 @@ html {
   height: 100%;
   overflow: visible;
   pointer-events: none;
-  z-index: 10;
+  z-index: 0;
 }
 
 /* Axes fade out when idle */
@@ -216,7 +220,7 @@ html {
     --font-size-small: 14px;
   }
   
-  .site-container { padding: 1rem 0.5rem; }
+  .site-container { padding: 1rem 0.5rem max(1rem, 25vh); }
   h1 { font-size: 26px; }
   h2 { font-size: 21px; }
 }

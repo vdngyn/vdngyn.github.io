@@ -68,8 +68,11 @@
     drift: 0.0802,        // μ, annualized
     volatility: 0.1652,   // σ, annualized
     horizon: 3,           // T, in years
-    textSelector: 'main', // the batch run on page load and by keyboard branches
-                          // centered below this, and stays below it
+    textSelector: '.contact-line', // the last line of text: the batch run on page
+                          // load and by keyboard branches centered below this,
+                          // and never crosses above it
+    minRoom: 0.15,        // share of the window that must be free below the text
+                          // for the page-load batch; it waits for a scroll until then
     hintId: 'brownian-hint'   // hidden once the first user-launched batch finishes
   };
 
@@ -234,7 +237,8 @@
     const pathData = (/** @type {number[]} */ xs, /** @type {number} */ k0) =>
       'M' + xs.map((x, i) => `${(ox + ((k0 + i) / steps) * w).toFixed(1)},${(c - k * x).toFixed(1)}`).join('L');
 
-    // Resample paths that cross the ceiling, keeping the lowest-peaking try
+    // Resample paths that cross the ceiling, keeping the lowest-peaking try,
+    // then reflect whatever still pokes above it back down
     const cap = (c - (ceiling + oy)) / k;
     const below = (/** @type {() => number[]} */ sample) => {
       let best = sample(), peak = Math.max(...best);
@@ -242,7 +246,7 @@
         const xs = sample(), p = Math.max(...xs);
         if (p < peak) [best, peak] = [xs, p];
       }
-      return best;
+      return peak < cap ? best : best.map(x => x > cap ? 2 * cap - x : x);
     };
 
     const clipId = `bm-reveal-${++batchId}`;
@@ -290,13 +294,20 @@
     frame = requestAnimationFrame(tick);
   }
 
-  // Page load and keyboard: branch centered in the space below the main text,
-  // keeping the paths out of the text (leaves at least 15% of the window free)
+  // Page load and keyboard: branch centered in the space below the text,
+  // keeping the paths out of the text. With less than minRoom of the window free
+  // below it, the page load draws nothing and returns false; the keyboard uses
+  // the bottom minRoom of the window anyway
   function releaseDefault(/** @type {boolean} */ user) {
     const { w, h } = viewport();
     const textBottom = document.querySelector(config.textSelector)?.getBoundingClientRect().bottom ?? 0;
-    const top = Math.min(Math.max(textBottom, 0), 0.85 * h);
+    let top = Math.max(textBottom, 0);
+    if (top > (1 - config.minRoom) * h) {
+      if (!user) return false;
+      top = (1 - config.minRoom) * h;
+    }
     release(w / 2, (top + h) / 2, user, top + 4);
+    return true;
   }
 
   function init() {
@@ -317,9 +328,18 @@
       else release(e.clientX, e.clientY, true);
     });
 
-    // Demo batch shortly after load, unless the visitor has already clicked
+    // Demo batch shortly after load, or once a scroll leaves room for it below
+    // the text, unless the visitor has already clicked
+    const demo = () => {
+      if (!current && !releaseDefault(false)) return;
+      window.removeEventListener('scroll', demo);
+      window.removeEventListener('resize', demo);
+    };
     setTimeout(() => {
-      if (!current) releaseDefault(false);
+      demo();
+      if (current) return;
+      window.addEventListener('scroll', demo, { passive: true });
+      window.addEventListener('resize', demo);
     }, 400);
   }
 
